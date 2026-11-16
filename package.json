@@ -1,0 +1,13 @@
+{
+  "name": "spark-api-proxy",
+  "version": "1.0.0",
+  "description": "Zero-leak reverse proxy gateway for Novita OpenAI API with text masking and client key virtualization",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "keywords": ["openai", "proxy", "reverse-proxy", "api-mask", "netlify", "cloudflare"],
+  "author": "",
+  "license": "MIT"
+}
