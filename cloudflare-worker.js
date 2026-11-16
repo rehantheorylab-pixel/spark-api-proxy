@@ -1,31 +1,21 @@
 /**
  * Cloudflare Worker Alternative: Spark AI Gateway & Masking Reverse Proxy
- *
- * Quick Deploy via Cloudflare Dashboard:
- * 1. Go to dash.cloudflare.com -> Workers & Pages -> Create Application -> Create Worker
- * 2. Paste this entire code into the worker editor and click "Deploy"
- * 3. (Optional) In Settings -> Variables, add NOVITA_API_KEY or CLIENT_API_KEY
- * 4. (Optional) In Settings -> Triggers, attach your custom domain!
  */
 
 const UPSTREAM_ORIGIN = "https://api.novita.ai/openai/v1";
 const DEFAULT_UPSTREAM_KEY = "sk_jl4V1qwUkaGNVo8aG9xYhNGHOY_gm4Qt4OknEfrIji0";
 
+/**
+ * Text replacement: detects any variation of "light router" / "literouter" and replaces with "spark".
+ * Does NOT replace novita.
+ */
 function maskText(content) {
   if (!content) return content;
-  return content
-    .replace(/light[\s\-_]*router/gi, (match) => {
-      if (match === match.toUpperCase()) return "SPARK";
-      if (match[0] === "L") return "Spark";
-      return "spark";
-    })
-    .replace(/api\.novita\.ai/gi, "api.spark.ai")
-    .replace(/novita\.ai/gi, "spark.ai")
-    .replace(/novita/gi, (match) => {
-      if (match === match.toUpperCase()) return "SPARK";
-      if (match[0] === "N") return "Spark";
-      return "spark";
-    });
+  return content.replace(/(light|lite)[\s\-_]*router/gi, (match) => {
+    if (match === match.toUpperCase()) return "SPARK";
+    if (match[0] === match[0].toUpperCase()) return "Spark";
+    return "spark";
+  });
 }
 
 function resolveUpstreamUrl(url) {
@@ -90,7 +80,6 @@ export default {
     const authHeader = request.headers.get("authorization") || "";
     const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-    // Check virtual key if configured
     if (clientAuthSecret && token !== clientAuthSecret && token !== upstreamApiKey) {
       return new Response(
         JSON.stringify({

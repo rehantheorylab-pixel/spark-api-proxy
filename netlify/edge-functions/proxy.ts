@@ -1,43 +1,21 @@
 // Netlify Edge Function: Spark AI Gateway & Masking Reverse Proxy
 
 const UPSTREAM_ORIGIN = "https://api.novita.ai/openai/v1";
-
-// Default Novita key if not specified in Netlify Environment Variables
 const DEFAULT_UPSTREAM_KEY = "sk_jl4V1qwUkaGNVo8aG9xYhNGHOY_gm4Qt4OknEfrIji0";
 
 /**
- * Text replacement to completely mask upstream branding, novita domain, and "light router" errors.
+ * Text replacement: detects any variation of "light router" / "literouter" and replaces with "spark".
+ * Does NOT replace novita.
  */
 function maskText(content: string): string {
   if (!content) return content;
-
-  return content
-    // Replace light router variations
-    .replace(/light[\s\-_]*router/gi, (match) => {
-      if (match === match.toUpperCase()) return "SPARK";
-      if (match[0] === "L") return "Spark";
-      return "spark";
-    })
-    // Replace domain
-    .replace(/api\.novita\.ai/gi, "api.spark.ai")
-    .replace(/novita\.ai/gi, "spark.ai")
-    // Replace standalone novita
-    .replace(/novita/gi, (match) => {
-      if (match === match.toUpperCase()) return "SPARK";
-      if (match[0] === "N") return "Spark";
-      return "spark";
-    });
+  return content.replace(/(light|lite)[\s\-_]*router/gi, (match) => {
+    if (match === match.toUpperCase()) return "SPARK";
+    if (match[0] === match[0].toUpperCase()) return "Spark";
+    return "spark";
+  });
 }
 
-/**
- * Normalizes incoming path to upstream OpenAI v1 endpoints.
- * Supports:
- *   /chat/completions -> /chat/completions
- *   /v1/chat/completions -> /chat/completions
- *   /openai/v1/chat/completions -> /chat/completions
- *   /models -> /models
- *   /v1/models -> /models
- */
 function resolveUpstreamUrl(url: URL): string {
   let pathname = url.pathname;
 
@@ -51,7 +29,6 @@ function resolveUpstreamUrl(url: URL): string {
     pathname = "/" + pathname;
   }
 
-  // Default root to /chat/completions if path is empty
   if (pathname === "/" || pathname === "") {
     pathname = "/chat/completions";
   }
@@ -62,7 +39,7 @@ function resolveUpstreamUrl(url: URL): string {
 export default async (request: Request, _context: any) => {
   const url = new URL(request.url);
 
-  // 1. CORS Preflight Support (Allow browser-based AI frontends)
+  // 1. CORS Preflight Support
   if (request.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -75,7 +52,7 @@ export default async (request: Request, _context: any) => {
     });
   }
 
-  // 2. Friendly root info page (when visiting the base URL in a web browser)
+  // 2. Friendly root info page
   if (url.pathname === "/" && request.method === "GET") {
     return new Response(
       JSON.stringify(
@@ -105,14 +82,12 @@ export default async (request: Request, _context: any) => {
   }
 
   // 3. Resolve Target API Keys
-  // Read from environment if set, otherwise use the configured default key
   const upstreamApiKey = (typeof Deno !== "undefined" ? Deno.env.get("NOVITA_API_KEY") : null) || DEFAULT_UPSTREAM_KEY;
   const clientAuthSecret = (typeof Deno !== "undefined" ? Deno.env.get("CLIENT_API_KEY") : null) || null;
 
   const authHeader = request.headers.get("authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
-  // If a specific CLIENT_API_KEY is defined in environment variables, validate it
   if (clientAuthSecret && token !== clientAuthSecret && token !== upstreamApiKey) {
     return new Response(
       JSON.stringify({
@@ -140,12 +115,10 @@ export default async (request: Request, _context: any) => {
   const forwardHeaders = new Headers();
   for (const [key, val] of request.headers.entries()) {
     const lower = key.toLowerCase();
-    // Strip host, referer, origin headers to prevent upstream detection
     if (lower === "host" || lower === "referer" || lower === "origin") continue;
     forwardHeaders.set(key, val);
   }
 
-  // Inject the real Novita API key into the authorization header
   forwardHeaders.set("Authorization", `Bearer ${upstreamApiKey}`);
   forwardHeaders.set("Accept-Encoding", "identity");
 
@@ -162,7 +135,6 @@ export default async (request: Request, _context: any) => {
   try {
     const upstreamResponse = await fetch(upstreamUrl, init);
 
-    // Prepare response headers, stripping sensitive upstream identifiers
     const responseHeaders = new Headers();
     upstreamResponse.headers.forEach((val, key) => {
       const lower = key.toLowerCase();
@@ -180,7 +152,6 @@ export default async (request: Request, _context: any) => {
       responseHeaders.set(key, val);
     });
 
-    // Custom gateway branding & CORS
     responseHeaders.set("Server", "Spark-Gateway");
     responseHeaders.set("Access-Control-Allow-Origin", "*");
 
@@ -206,7 +177,7 @@ export default async (request: Request, _context: any) => {
       });
     }
 
-    // 6. Handle Standard Text / JSON Responses (including error payloads)
+    // 6. Handle Standard Text / JSON Responses
     const rawBody = await upstreamResponse.text();
     const maskedBody = maskText(rawBody);
 

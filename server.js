@@ -9,21 +9,17 @@ const UPSTREAM_ORIGIN = "https://api.novita.ai/openai/v1";
 const DEFAULT_UPSTREAM_KEY = process.env.NOVITA_API_KEY || "sk_jl4V1qwUkaGNVo8aG9xYhNGHOY_gm4Qt4OknEfrIji0";
 const CLIENT_API_KEY = process.env.CLIENT_API_KEY || null;
 
+/**
+ * Text replacement: detects any variation of "light router" / "literouter" and replaces with "spark".
+ * Does NOT touch novita or any other words.
+ */
 function maskText(content) {
   if (!content) return content;
-  return content
-    .replace(/light[\s\-_]*router/gi, (match) => {
-      if (match === match.toUpperCase()) return "SPARK";
-      if (match[0] === "L") return "Spark";
-      return "spark";
-    })
-    .replace(/api\.novita\.ai/gi, "api.spark.ai")
-    .replace(/novita\.ai/gi, "spark.ai")
-    .replace(/novita/gi, (match) => {
-      if (match === match.toUpperCase()) return "SPARK";
-      if (match[0] === "N") return "Spark";
-      return "spark";
-    });
+  return content.replace(/(light|lite)[\s\-_]*router/gi, (match) => {
+    if (match === match.toUpperCase()) return "SPARK";
+    if (match[0] === match[0].toUpperCase()) return "Spark";
+    return "spark";
+  });
 }
 
 function resolveUpstreamPath(pathname) {
